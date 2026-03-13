@@ -1,0 +1,72 @@
+# Feature Workflow - LockStep Edition 配置
+
+# 项目信息
+project:
+  name: OA_Tool
+  main_branch: main
+  repo_path: oa-tool
+  tech_stack: electron-react-vite
+  test_framework: playwright
+
+# 并行控制
+parallelism:
+  max_concurrent: 2
+
+# Git 设置
+git:
+  remote: origin
+  auto_push: false
+  merge_strategy: "--no-ff"
+  push_tags: true
+
+# 分支策略
+naming:
+  feature_prefix: feat
+  branch_prefix: feature
+  worktree_prefix: OA_Tool
+
+# 路径配置
+paths:
+  features_dir: features
+  archive_dir: features/archive
+  worktree_base: ..
+  repo_path: oa-tool
+
+# LockStep 工作流配置
+workflow:
+  # 自动调度
+  auto_start_next: true          # 并行开发完成后自动启动下一个
+
+  # 协议执行
+  protocol:
+    strict_mode: true             # 严格模式：任何 STP 失败立即停止
+    emit_stp_events: true         # 输出 STP 进入事件（用于调试）
+    checkpoint_interval: 5        # 每 5 个 STP 保存一次检查点
+
+  # 验证配置
+  verification:
+    require_lint: true            # 验证阶段必须通过 lint
+    require_test: true            # 验证阶段必须通过测试
+    require_checklist: true       # 验证阶段必须完成检查清单
+
+  # 恢复配置
+  recovery:
+    auto_resume: true             # 检测到中断后自动恢复
+    max_retries: 3                # 最大重试次数
+
+# 归档配置
+completion:
+  archive:
+    create_tag: true
+    tag_format: "{id}-{date}"
+    tag_date_format: "%Y%m%d"
+
+  cleanup:
+    delete_worktree: true
+    delete_branch: true
+    verify_cleanup: true          # 清理后验证
+
+  record:
+    update_spec: true
+    update_archive_log: true
+    record_stp_history: true      # 记录 STP 执行历史
