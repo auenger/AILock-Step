@@ -1,0 +1,14 @@
+# Ignore everything by default
+/*
+
+# But keep these files
+!.gitignore
+!README.md
+!AILock-Step-运行协议-算子说明书-v1-0.md
+!feature-workflow/
+
+# Keep git folder
+!.git/
+
+# Ignore OS files
+.DS_Store
