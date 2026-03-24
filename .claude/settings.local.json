@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(git init && git remote add origin https://github.com/auenger/AILock-Step.git)",
-      "Bash(git add . && git status)",
-      "Bash(git push -u origin main)"
-    ]
-  }
-}
