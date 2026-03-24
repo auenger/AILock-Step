@@ -4,6 +4,7 @@
 
 ## 核心理念
 
+- **项目上下文**: 通过 PM Agent 建立项目上下文，确保 AI 开发一致性
 - **并行开发**: 支持多个需求同时开发，通过 worktree 物理隔离
 - **自动调度**: 根据优先级自动安排开发顺序
 - **状态追踪**: 通过 queue.yaml 统一管理需求状态
@@ -33,6 +34,16 @@
 
 ## 命令列表
 
+### Agents
+
+| 命令 | 说明 |
+|------|------|
+| `/pm-agent` | PM Agent - 建立/更新项目上下文 (project-context.md) |
+| `/feature-manager` | 主控 Agent - 需求调度、状态监控 |
+| `/dev-agent` | 开发 Agent - 自动化开发流程 |
+
+### Skills
+
 | 命令 | 说明 |
 |------|------|
 | `/new-feature` | 创建新需求 |
@@ -49,6 +60,8 @@
 ## 完整开发流程
 
 ```
+/pm-agent                 建立项目上下文（新项目/现有项目梳理）
+      ↓
 /new-feature              创建需求（对话 → 文档 → 队列）
       ↓
 /start-feature            启动开发（创建分支 → 创建 worktree）
@@ -61,6 +74,15 @@
       ↓
 自动调度下一个
 ```
+
+### PM Agent 使用场景
+
+| 场景 | 命令 | 说明 |
+|------|------|------|
+| 新项目初始化 | `/pm-agent` | 通过对话建立项目上下文 |
+| 现有项目梳理 | `/pm-agent 帮我梳理这个项目` | 自动扫描代码库，生成上下文 |
+| 更新上下文 | `/pm-agent 更新上下文` | 增量更新 project-context.md |
+| 快速添加规则 | `/pm-agent 添加规则：xxx` | 快速添加一条规则 |
 
 ## 状态流转
 
@@ -147,6 +169,7 @@
 
 | Agent | 命令 | 状态 |
 |-------|------|------|
+| pm-agent | `/pm-agent` | ✅ 已实现 |
 | feature-manager | `/feature-manager` | ✅ 已实现 |
 | dev-agent | `/dev-agent` | ✅ 已实现 |
 
@@ -168,7 +191,8 @@
 ├── workflows/                ← Workflows (2个)
 │   ├── feature-lifecycle.md
 │   └── auto-schedule.md
-└── agents/                   ← Agents (2个)
+└── agents/                   ← Agents (3个)
+    ├── pm-agent.md           ← PM Agent
     ├── feature-manager.md
     └── dev-agent.md
 
@@ -176,6 +200,9 @@ feature-workflow/implementation/
 ├── skills-implemented/       ← Skills 冗余副本
 ├── workflows-implemented/    ← Workflows 冗余副本
 ├── agents-implemented/       ← Agents 冗余副本
+│   ├── pm-agent.md           ← PM Agent
+│   ├── feature-manager.md
+│   └── dev-agent.md
 ├── core-lib.md               ← 核心库文档
 └── MVP-README.md             ← MVP 说明
 ```
