@@ -37,10 +37,10 @@ User → /dev-agent (command, .claude/commands/)
 |------|------|------|
 | dev-agent | Command (`.claude/commands/`) | `.claude/commands/dev-agent.md` |
 | dev-subagent | Agent (`.claude/agents/`) | `.claude/agents/dev-subagent.md` |
-| start-feature | Skill (`.claude/skills/`) | `.claude/skills/start-feature.md` |
-| implement-feature | Skill (`.claude/skills/`) | `.claude/skills/implement-feature.md` |
-| verify-feature | Skill (`.claude/skills/`) | `.claude/skills/verify-feature.md` |
-| complete-feature | Skill (`.claude/skills/`) | `.claude/skills/complete-feature.md` |
+| start-feature | Skill (`.claude/skills/`) | `.claude/skills/start-feature/skill.md` |
+| implement-feature | Skill (`.claude/skills/`) | `.claude/skills/implement-feature/skill.md` |
+| verify-feature | Skill (`.claude/skills/`) | `.claude/skills/verify-feature/skill.md` |
+| complete-feature | Skill (`.claude/skills/`) | `.claude/skills/complete-feature/skill.md` |
 | mate-agent | **已废弃** | 调度逻辑合并到 dev-agent |
 
 ## See Also

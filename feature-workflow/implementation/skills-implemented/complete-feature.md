@@ -337,10 +337,10 @@ Add merge record to `features/active-{id}/spec.md`:
 
 ### Step 10: Archive Feature (with Evidence)
 
-Move feature directory to archive, preserving all evidence:
+Files already copied to `done-{id}-{date}` in Step 6. Remove the active directory:
 
 ```bash
-mv features/active-{id} features/archive/done-{id}
+rm -rf features/active-{id}
 ```
 
 Update `features/archive/archive-log.yaml`:

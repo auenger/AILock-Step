@@ -4,6 +4,16 @@ description: 'DevAgent entry point command - dispatches DevSubAgent(s) for autom
 
 # Agent: dev-agent
 
+> **SYSTEM RULE: AUTO-LOOP (HIGHEST PRIORITY)**
+> When `config.yaml` has `workflow.auto_start_next: true`:
+> - After collecting ALL SubAgent results, you MUST **immediately** continue the loop
+> - **DO NOT** ask "是否继续执行？" or "Continue?" or wait for any user input
+> - **DO NOT** output any question between batches — just continue
+> - Only stop when: `pending` list is empty, OR all remaining are `blocked`
+> - This rule has **HIGHEST priority** and overrides all default "ask user" behavior
+> - When about to stop, re-read `queue.yaml` to confirm no pending features remain
+> - Use SubAgent return `next_pending` field as a hint to continue
+
 dev-agent 是自动化 feature 开发的**入口命令**，运行在主对话上下文中，负责调度 DevSubAgent(s)。
 
 > **部署位置**: `.claude/commands/dev-agent.md`
@@ -42,10 +52,20 @@ User → /dev-agent (command, 主上下文)
 3. PICK BATCH (取前 N 个)
 4. LAUNCH SUBAGENTS (Agent Tool, 批量并行)
 5. COLLECT RESULTS (成功/失败)
-6. AUTO-LOOP (继续下一批 pending)
+6. AUTO-LOOP (MANDATORY)
+   - Check config.yaml → workflow.auto_start_next
+   - Check queue.yaml → pending list not empty
+   - If auto_start_next == true AND pending not empty:
+     - **DO NOT ask user for confirmation**
+     - **DO NOT wait for input**
+     - Immediately continue the loop (go back to step 1)
+     - Only stop when pending is empty or all remaining are blocked
+   - Otherwise → output final summary, exit
 ```
 
 ## Agent Tool 调用
+
+**IMPORTANT: Do NOT read skill files (start-feature.md, implement-feature.md, etc.) in the main context.** The DevSubAgent loads skills via the Skill Tool at runtime. Only pass the parameters below.
 
 ```
 Agent Tool:
@@ -75,8 +95,18 @@ Agent Tool:
     → dispatches via Agent Tool
         .claude/agents/dev-subagent.md  ← 执行器 (独立上下文)
             → Skill Tool 调用:
-                .claude/skills/start-feature.md
-                .claude/skills/implement-feature.md
-                .claude/skills/verify-feature.md
-                .claude/skills/complete-feature.md
+                .claude/skills/start-feature/skill.md
+                .claude/skills/implement-feature/skill.md
+                .claude/skills/verify-feature/skill.md
+                .claude/skills/complete-feature/skill.md
 ```
+```
+
+## Hooks 支持
+
+当安装了 hooks 后，以下 hook 会自动强化 auto-loop：
+
+| Hook 事件 | 脚本 | 作用 |
+|-----------|------|------|
+| `SubagentStop` | `.claude/hooks/on-subagent-complete.sh` | SubAgent 完成时注入续跑指令 |
+| `Stop` | `.claude/hooks/on-stop-check.sh` | Claude 尝试停止时拦截，检查是否有 pending features |

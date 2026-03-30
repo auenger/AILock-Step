@@ -174,8 +174,10 @@
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│ Step 10: 创建 archive-meta.yaml                                   │
-│ - 在归档目录创建元数据文件                                       │
+│ Step 10: 清理 active 目录                                          │
+│ - 文件已在 Step 6 复制到 done-{id}-{date}/                        │
+│ - 删除 active 目录: rm -rf features/active-{id}                  │
+│ - 在归档目录创建 archive-meta.yaml                                │
 │ - 包含: id, name, completed, branch, commit, tag, evidence        │
 │ - 包含冲突记录 (如有)                                             │
 │ - 包含变更文件列表                                                 │

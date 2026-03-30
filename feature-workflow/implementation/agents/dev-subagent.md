@@ -32,6 +32,7 @@ DevSubAgent
 | Automation | 通过 `--auto` / `--auto-fix` / `--auto-resolve` 标志 | 与手动路径共用同一套 Skills |
 | Prompt size | 极简（~80行） | 只定义调度顺序和规则，不包含操作细节 |
 | Error handling | 自动修复+重试（最多2次），verify 失败不阻塞 | 全自动原则 |
+| Skill loading | `allowed-tools` 含 `Skill`，运行时动态调用 | 不支持 `skills:` frontmatter 预加载 |
 
 ## Replaces
 
