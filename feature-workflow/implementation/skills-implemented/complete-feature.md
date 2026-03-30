@@ -93,7 +93,7 @@ REMOTE={config.git.remote || "origin"}
 ```bash
 cd {repo_path}  # Main repo (use repo_path from config if set)
 git checkout {main_branch}
-git pull {remote} {main_branch}  # Get latest changes
+git pull {remote} {main_branch} 2>/dev/null || echo "pull skipped (no remote or offline)"
 ```
 
 **Step 4.3: Rebase Feature Branch**
@@ -224,7 +224,7 @@ TAG_NAME="{id}-{date}"  # e.g., feat-auth-20260302
 git tag -a "$TAG_NAME" -m "Archive: {name}"
 ```
 
-If `config.yaml` git.push_tags: `git push origin "$TAG_NAME"`
+If `config.yaml` git.push_tags: `git push origin "$TAG_NAME" 2>/dev/null || echo "tag push skipped"`
 
 ### Step 6: Copy Feature Documents to Archive (BEFORE Worktree Cleanup)
 
@@ -245,6 +245,11 @@ cp features/active-{id}/checklist.md features/archive/done-{id}-{date}/
 # Copy evidence directory if it exists (from verify-feature)
 if [ -d "features/active-{id}/evidence" ]; then
   cp -r features/active-{id}/evidence features/archive/done-{id}-{date}/
+fi
+
+# Fallback: also check pending-{id}/evidence (may exist if verify wrote to wrong path)
+if [ -d "features/pending-{id}/evidence" ] && [ ! -d "features/archive/done-{id}-{date}/evidence" ]; then
+  cp -r features/pending-{id}/evidence features/archive/done-{id}-{date}/
 fi
 ```
 
@@ -337,10 +342,16 @@ Add merge record to `features/active-{id}/spec.md`:
 
 ### Step 10: Archive Feature (with Evidence)
 
-Files already copied to `done-{id}-{date}` in Step 6. Remove the active directory:
+Files already copied to `done-{id}-{date}` in Step 6. Remove the active directory and any stale pending directory:
 
 ```bash
 rm -rf features/active-{id}
+
+# Also clean up stale pending directory if it exists
+# (may contain leftover evidence from verify-feature writing to wrong path)
+if [ -d "features/pending-{id}" ]; then
+  rm -rf features/pending-{id}
+fi
 ```
 
 Update `features/archive/archive-log.yaml`:
@@ -387,7 +398,9 @@ Update `meta.last_updated`.
 
 ### Step 12: Update Project Context (Incremental)
 
-Analyze if this feature introduced changes that should be reflected in `project-context.md`.
+**If `--auto`: SKIP this step** — SubAgent should not spend time on context analysis. The main context (dev-agent) will handle this.
+
+**Otherwise:** Analyze if this feature introduced changes that should be reflected in `project-context.md`.
 
 **Step 12.1: Analyze Feature Impact**
 
@@ -449,10 +462,9 @@ If update needed, modify only relevant sections.
 
 ### Step 13: Auto-Schedule Next
 
-If `config.yaml` workflow.auto_start: true:
-- Check if pending list is not empty
-- Get highest priority feature
-- Call start-feature for it
+**If `--auto`: SKIP this step** — SubAgent does not handle scheduling. The main context (dev-agent) manages the auto-loop.
+
+**Otherwise:** If `config.yaml` workflow.auto_start: true and pending list is not empty: start highest priority feature.
 
 ## Output
 

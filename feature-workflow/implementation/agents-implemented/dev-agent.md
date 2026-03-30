@@ -51,7 +51,17 @@ User → /dev-agent (command, 主上下文)
 2. EVALUATE CANDIDATES (依赖 + 优先级 + 并行限制)
 3. PICK BATCH (取前 N 个)
 4. LAUNCH SUBAGENTS (Agent Tool, 批量并行)
-5. COLLECT RESULTS (成功/失败)
+5. COLLECT RESULTS
+   - success → feature already merged/tagged/archived by SubAgent
+   - error → log diagnostics, re-queue feature, continue other features
+
+   **SubAgent Timeout Protection:**
+   Read `config.yaml` → `workflow.subagent_timeout` (default: 20 minutes).
+   If a background SubAgent exceeds this timeout and the feature's git operations
+   are already completed (tag exists, branch merged):
+   - Check: `git tag -l "{id}-*"` and `git log --oneline -5` on main branch
+   - If merge/tag already exists → treat as success, continue auto-loop
+   - Do NOT wait indefinitely for a stuck SubAgent
 6. AUTO-LOOP (MANDATORY)
    - Check config.yaml → workflow.auto_start_next
    - Check queue.yaml → pending list not empty
@@ -85,6 +95,7 @@ Agent Tool:
 | 场景 | 处理 |
 |------|------|
 | SubAgent error | 记录诊断，re-queue，继续其他 feature |
+| SubAgent timeout | 读 config `workflow.subagent_timeout`（默认 20 分钟），检查 git 状态，merge/tag 已存在则视为成功 |
 | 所有 pending blocked | 报告阻塞原因，暂停 |
 | queue.yaml 损坏 | 停止，报错 |
 

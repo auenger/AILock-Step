@@ -94,11 +94,11 @@
 ┌─────────────────────────────────────────────────────────────────┐
 │ Step 4: 合并到 Main                                              │
 │ - git checkout main                                              │
-│ - git pull origin main (如果配置)                                │
+│ - git pull origin main (如果配置, 加 2>/dev/null || echo skipped)   │
 │ - git merge {branch} --no-ff -m "Merge {branch}: {name}"        │
 │ - 处理合并冲突（如有）                                           │
 │ - 记录 merge commit hash                                         │
-│ - 如果 auto_push=true: git push origin main                     │
+│ - 如果 auto_push=true: git push origin main (加 2>/dev/null || echo skipped)
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -107,7 +107,7 @@
 │ - 生成 tag 名称: {prefix}-{id}-{date}                           │
 │   例: feat-auth-20260302                                        │
 │ - git tag -a {tag_name} -m "Archive: {name}"                    │
-│ - 如果配置了远程: git push origin {tag_name}                    │
+│ - 如果配置了远程: git push origin {tag_name} (加 2>/dev/null || echo skipped)
 │ - 记录 tag 名称                                                  │
 └─────────────────────────────────────────────────────────────────┘
                               │
@@ -124,6 +124,11 @@
 │   - cp checklist.md features/archive/done-{id}-{date}/           │
 │ - 复制 evidence 目录 (如果存在):                                 │
 │   - cp -r evidence features/archive/done-{id}-{date}/            │
+│ - 回退检查 pending 目录 (verify-feature 可能写入错误路径):           │
+│   - if [ -d "features/pending-{id}/evidence" ] &&                   │
+│     [ ! -d "features/archive/done-{id}-{date}/evidence" ]; then    │
+│     cp -r features/pending-{id}/evidence \                         │
+│       features/archive/done-{id}-{date}/                           │
 │                                                                 │
 │ 为什么这一步很关键:                                              │
 │ - worktree 包含代码变更，但需求文档在 active 目录中               │
@@ -174,9 +179,13 @@
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│ Step 10: 清理 active 目录                                          │
+│ Step 10: 清理 active 目录 (增强版)                                     │
 │ - 文件已在 Step 6 复制到 done-{id}-{date}/                        │
 │ - 删除 active 目录: rm -rf features/active-{id}                  │
+│ - 清理残留 pending 目录 (如果存在):                                │
+│   - if [ -d "features/pending-{id}" ]; then                      │
+│       rm -rf features/pending-{id}                                │
+│   - pending 可能包含 verify-feature 写入的残留 evidence          │
 │ - 在归档目录创建 archive-meta.yaml                                │
 │ - 包含: id, name, completed, branch, commit, tag, evidence        │
 │ - 包含冲突记录 (如有)                                             │
@@ -231,6 +240,8 @@
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │ Step 14: 自动调度 (增强版)                                          │
+│                                                                 │
+│ ⚠️ --auto 模式下跳过此步骤（由 dev-agent 负责调度）                │
 │                                                                 │
 │ ⚠️ 支持连续开发模式                                    │
 │                                                                 │

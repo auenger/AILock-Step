@@ -31,6 +31,19 @@ Options:
 - Feature must be in `queue.yaml` active list
 - Feature directory exists at `features/active-{id}/`
 
+### Feature Directory Path Resolution
+
+**IMPORTANT**: Evidence MUST be saved to `features/active-{id}/evidence/`. Never write evidence to `pending-{id}`.
+
+Before proceeding, resolve the feature directory:
+
+1. Check `features/active-{id}/` — use this if it exists (normal case)
+2. If only `features/pending-{id}/` exists: warn that `/start-feature` should be run first, but proceed with pending as working directory
+3. If BOTH `active-{id}/` and `pending-{id}/` exist with evidence in pending:
+   - Move any evidence from `pending-{id}/evidence/` to `active-{id}/evidence/`
+   - This handles cases where a previous verify run wrote to the wrong path
+4. Use the resolved `{feature_dir}` variable for all subsequent steps
+
 ## Execution Steps
 
 ### Step 1: Check Task Completion

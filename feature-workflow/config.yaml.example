@@ -13,7 +13,7 @@ project:
 
 # 并行控制
 parallelism:
-  max_concurrent: 3                    # 最大并行开发数
+  max_concurrent: 2                    # 最大并行开发数
 
 # Git 设置
 git:
@@ -31,6 +31,7 @@ worktree_base: ..
 workflow:
   auto_start: true                     # 完成一个后自动启动下一个
   require_checklist: true              # 完成前检查 checklist
+  subagent_timeout: 20                 # SubAgent 超时阈值（分钟），超时后检查 git 状态决定是否继续
 
   # 需求切分
   splitting:
