@@ -9,13 +9,14 @@ Implement the feature by reading specifications, analyzing tasks, and writing co
 ## Usage
 
 ```
-/implement-feature <feature-id> [--task=<index>] [--dry-run]
+/implement-feature <feature-id> [--task=<index>] [--dry-run] [--auto]
 ```
 
 Parameters:
 - `feature-id`: The feature ID (required)
 - `--task=<index>`: Implement only a specific task (optional)
 - `--dry-run`: Analyze only, don't implement (optional)
+- `--auto`: Skip confirmation, auto-proceed (for SubAgent use)
 
 ## Pre-flight Checks
 
@@ -64,6 +65,10 @@ Start implementation? (y/n)
 
 Display implementation plan and ask for confirmation.
 
+**If `--auto`:** Skip confirmation, proceed directly to Step 4.
+
+**Otherwise:**
+
 Options:
 - `y` - Start implementation
 - `n` - Cancel
@@ -105,7 +110,13 @@ Completed tasks: 4/4
 Files changed: 5
 
 Testing: 12 passed, 0 failed
+```
 
+**If `--auto`:** SubAgent will automatically proceed to verify → complete. No manual next-step prompt.
+
+**Otherwise:**
+
+```
 Next steps:
   - Run /verify-feature {id} to validate
   - Or run /complete-feature {id} to finish

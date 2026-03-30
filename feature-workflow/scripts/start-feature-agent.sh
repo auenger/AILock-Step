@@ -1,5 +1,17 @@
 #!/bin/bash
 #
+# DEPRECATED: This script has been replaced by the MateAgent + DevSubAgent architecture.
+# See: feature-workflow/implementation/agents-implemented/mate-agent.md
+#      feature-workflow/implementation/agents-implemented/dev-subagent.md
+#      feature-workflow/docs/dev-agent-subagent-optimization.md
+#
+# The new approach uses Claude Code's native Agent Tool to launch DevSubAgents,
+# eliminating the need for external `claude --print` processes.
+#
+# This file is kept for reference only. Do not use in production.
+#
+# --- Original header below ---
+#
 # start-feature-agent.sh - 启动一个独立的 Feature Agent 进程
 #
 # 用法: ./start-feature-agent.sh <feature-id> <worktree-path> [branch-name]

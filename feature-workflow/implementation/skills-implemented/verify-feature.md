@@ -18,8 +18,13 @@ Both methods capture:
 ## Usage
 
 ```
-/verify-feature <feature-id>
+/verify-feature <feature-id> [options]
 ```
+
+Options:
+- `--auto-fix`: Automatically fix test failures and lint errors (for SubAgent use)
+- `--auto`: Shorthand for `--auto-fix` (full auto mode for SubAgent)
+- `--max-retries=<n>`: Maximum auto-fix retry attempts (default: 2)
 
 ## Pre-flight Checks
 
@@ -768,13 +773,96 @@ message: |
 |-------|-------------|----------|
 | NOT_ACTIVE | Feature not in active list | Check ID |
 | WORKTREE_NOT_FOUND | Worktree missing | Run /start-feature |
-| TEST_FAILURE | Unit tests failing | Fix tests first |
-| SCENARIO_FAILED | Gherkin scenario not satisfied | Check evidence, fix implementation |
+| TEST_FAILURE | Unit tests failing | Auto-fix (if --auto-fix) or manual fix |
+| SCENARIO_FAILED | Gherkin scenario not satisfied | Auto-fix (if --auto-fix) or check evidence |
 | PLAYWRIGHT_MCP_UNAVAILABLE | Playwright MCP not configured | Fallback to `npx playwright test` |
 | PLAYWRIGHT_NOT_INSTALLED | Playwright not in project | Run `npm install -D @playwright/test` |
 | DEV_SERVER_NOT_RUNNING | Frontend dev server not running | Auto-start or manual start |
 | TRACE_SAVE_FAILED | Failed to save trace file | Check disk space/permissions |
 | E2E_TEST_GENERATION_FAILED | Failed to generate test from Gherkin | Manual test creation required |
+
+## Auto-Fix Workflow (`--auto-fix` / `--auto`)
+
+When `--auto-fix` is enabled (SubAgent mode), test failures and lint errors are automatically resolved.
+
+### Flow
+
+```
+Error Detected (test failure / lint error / type error)
+  ↓
+Attempt 1: Analyze & Fix
+  ├── Parse error message and stack trace
+  ├── Identify root cause (logic error, missing import, type mismatch, etc.)
+  ├── Read relevant source files and spec.md
+  ├── Apply fix
+  └── Re-run the failing command
+      ├── Success → Continue to next check
+      └── Still failing ↓
+  ↓
+Attempt 2: Alternative Fix
+  ├── Re-analyze with different approach
+  ├── Try alternative solution
+  └── Re-run
+      ├── Success → Continue
+      └── Still failing ↓
+  ↓
+Max retries reached → Log diagnostics, continue
+  ├── Record: error type, file, message, attempted fixes
+  ├── Mark verification as "warning" (not "failed")
+  └── Proceed — do NOT block the pipeline
+```
+
+### Auto-Fix Strategies by Error Type
+
+| Error Type | Detection | Fix Strategy |
+|------------|-----------|-------------|
+| **AssertionError** | Test assertion doesn't match | Analyze expected vs actual → fix implementation logic |
+| **ImportError / ModuleNotFoundError** | Cannot import module | Check dependency → `pip install` / `npm install` → verify path |
+| **TypeError** | Wrong type used | Read type annotations → fix type mismatch |
+| **NameError / UndefinedError** | Variable not defined | Check scope → add missing definition or fix reference |
+| **SyntaxError** | Code syntax invalid | Fix syntax → re-run |
+| **Lint errors** | Style/convention violations | Read lint rule → apply fix → re-run lint |
+| **Type check errors** | mypy/pyright/tsc errors | Fix type annotations → re-run type check |
+| **FileNotFoundError** | Missing file/path | Check if file should exist → create or fix path |
+| **Port/Connection errors** | Service not available | Check if service needs to start → retry after delay |
+
+### Auto-Fix Constraints
+
+```yaml
+auto_fix_rules:
+  max_retries: 2                      # Default, configurable via --max-retries
+  timeout_per_attempt: 120s           # Max time per fix attempt
+  never_modify:
+    - config.yaml                     # Never modify project config
+    - other_feature_files             # Never touch other features
+  always_log:
+    - original_error                  # Log what went wrong
+    - fix_applied                     # Log what was changed
+    - retry_result                    # Log if fix worked
+  on_exhausted:
+    action: continue                  # Do NOT block, log and proceed
+    status: warning                   # Mark as warning, not failure
+```
+
+### Auto-Fix Output
+
+After auto-fix attempts (success or failure):
+
+```
+🔧 Auto-Fix Report: {feature_id}
+
+Error: AssertionError in test_login.py::test_valid_credentials
+  Expected: 200, Got: 401
+
+Attempt 1: Fixed authentication logic in auth/service.py
+  → Re-ran tests: 11 passed, 1 failed ❌
+
+Attempt 2: Fixed token validation in auth/middleware.py
+  → Re-ran tests: 12 passed, 0 failed ✅
+
+Result: Fixed after 2 attempts
+Files modified: auth/service.py, auth/middleware.py
+```
 
 ## Automatic Test Generation
 

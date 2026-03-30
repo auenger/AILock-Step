@@ -1,415 +1,82 @@
 ---
-description: 'Development agent that automates the complete feature development workflow from start to completion.'
+description: 'DevAgent entry point command - dispatches DevSubAgent(s) for automated feature development.'
 ---
 
 # Agent: dev-agent
 
-Development agent that automates the complete feature development process: start → implement → verify → complete.
+dev-agent 是自动化 feature 开发的**入口命令**，运行在主对话上下文中，负责调度 DevSubAgent(s)。
 
-## Role
+> **部署位置**: `.claude/commands/dev-agent.md`
+> **运行方式**: 用户输入 `/dev-agent [feature-id] [--resume] [--no-complete]`
+> **上下文**: 主对话上下文，可使用 Agent Tool 派发 SubAgent
 
-dev-agent is the "developer" role, transforming requirements into code by orchestrating multiple skills:
-
-```
-Requirement → Analysis → Implementation → Verification → Completion
-```
-
-## Capabilities
-
-### Skills to Call
-
-```yaml
-skills:
-  - new-feature
-  - start-feature
-  - implement-feature
-  - verify-feature
-  - complete-feature
-  - list-features
-  - block-feature
-  - unblock-feature
-```
-
-### File Operations
-
-```yaml
-read:
-  - feature-workflow/config.yaml
-  - feature-workflow/queue.yaml
-  - features/**/spec.md
-  - features/**/task.md
-  - features/**/checklist.md
-  - All code files in worktree
-
-write:
-  - feature-workflow/queue.yaml
-  - features/**/spec.md
-  - features/**/task.md
-  - features/**/checklist.md
-  - All code files in worktree
-```
-
-## Modes
-
-### Mode 1: Full Development
-
-Create and develop feature from description:
+## 架构
 
 ```
-/dev-feature "User authentication feature"
-
-→ Automatically:
-  1. new-feature (create)
-  2. start-feature (setup)
-  3. implement-feature (code)
-  4. verify-feature (check)
-  5. complete-feature (finish)
+User → /dev-agent (command, 主上下文)
+         │
+         ├── /dev-agent feat-xxx       → Agent Tool → DevSubAgent (单个)
+         ├── /dev-agent                 → Agent Tool → DevSubAgent × N (批量)
+         └── /dev-agent --resume        → Agent Tool → DevSubAgent × N (恢复)
 ```
 
-### Mode 2: Continue Development
+**dev-agent 合并了旧 MateAgent 的调度逻辑**，因为：
+- 自定义 SubAgent 不能再派生 SubAgent（v2.1.x 限制）
+- 调度必须在主上下文中执行（才能使用 Agent Tool）
+- 不需要单独的 MateAgent
 
-Continue from existing feature:
-
-```
-/dev-feature feat-auth
-
-→ Check status then:
-  - If pending: start → implement → verify → complete
-  - If active: implement → verify → complete
-  - If blocked: prompt to unblock
-```
-
-### Mode 3: Interactive
-
-Ask for confirmation at each stage:
+## 命令格式
 
 ```
-/dev-feature feat-auth --interactive
-
-→ Ask before each stage:
-  "About to implement. Continue? (y/n)"
-  "Implementation done. Verify? (y/n)"
-  ...
+/dev-agent                      # 批量模式
+/dev-agent <feature-id>         # 单个模式
+/dev-agent --resume             # 恢复模式
+/dev-agent --no-complete        # 跳过 complete 阶段
 ```
 
-## Execution Flow
+## 调度循环
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                      dev-agent Main Flow                         │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ Step 1: Parse Input                                              │
-│ - If description: create new feature                            │
-│ - If feature ID: find existing feature                          │
-│ - Determine mode                                                 │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ Step 2: Check Status                                             │
-│ - Read queue.yaml                                                │
-│ - Check feature status                                           │
-│ - Determine starting stage                                       │
-│                                                                  │
-│ Status mapping:                                                  │
-│   pending  → start from start-feature                           │
-│   active   → start from implement-feature                       │
-│   blocked  → prompt user, exit                                  │
-│   done     → notify complete, exit                              │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ Step 3: Execute Stages                                           │
-│                                                                  │
-│   ┌─────────────────┐                                          │
-│   │ start-feature   │  (if needed)                             │
-│   └────────┬────────┘                                          │
-│            │                                                    │
-│            ▼                                                    │
-│   ┌─────────────────┐                                          │
-│   │implement-feature│                                          │
-│   └────────┬────────┘                                          │
-│            │                                                    │
-│            ▼                                                    │
-│   ┌─────────────────┐                                          │
-│   │ verify-feature  │                                          │
-│   └────────┬────────┘                                          │
-│            │                                                    │
-│            ▼                                                    │
-│   ┌─────────────────┐                                          │
-│   │complete-feature │                                          │
-│   └─────────────────┘                                          │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ Step 4: Handle Errors                                            │
-│ - If stage fails: pause and report                              │
-│ - Provide fix suggestions                                        │
-│ - Wait for user instruction                                      │
-│                                                                  │
-│ Recovery: Fix and rerun from interruption point                 │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ Step 5: Report Completion                                        │
-│ - Summarize results                                              │
-│ - Show file changes                                              │
-│ - Show next pending feature                                      │
-└─────────────────────────────────────────────────────────────────┘
+1. READ STATE (queue.yaml + config.yaml)
+2. EVALUATE CANDIDATES (依赖 + 优先级 + 并行限制)
+3. PICK BATCH (取前 N 个)
+4. LAUNCH SUBAGENTS (Agent Tool, 批量并行)
+5. COLLECT RESULTS (成功/失败)
+6. AUTO-LOOP (继续下一批 pending)
 ```
 
-## Command Options
-
-| Option | Description |
-|--------|-------------|
-| `--mode=auto` | Auto-execute all stages (default) |
-| `--mode=interactive` | Ask confirmation at each stage |
-| `--mode=step` | Execute one stage then stop |
-| `--start-from=<stage>` | Start from specific stage |
-| `--skip-verify` | Skip verification stage |
-| `--no-auto-complete` | Don't auto-complete after verify |
-| `--resume` | Resume from last interruption |
-
-## Output
-
-### Full Success
-
-```yaml
-status: success
-feature:
-  id: feat-auth
-  name: User Authentication
-
-execution:
-  stages:
-    - name: start-feature
-      status: success
-      duration: 5s
-    - name: implement-feature
-      status: success
-      duration: 2m 30s
-      tasks_completed: 5
-    - name: verify-feature
-      status: success
-      duration: 15s
-      tests_passed: 12
-    - name: complete-feature
-      status: success
-      duration: 10s
-
-summary:
-  total_duration: 3m 00s
-  files_changed: 8
-  tests_passed: 12
-  merged_to: main
-
-next:
-  auto_scheduled: feat-dashboard
-```
-
-### Partial Failure
-
-```yaml
-status: partial
-feature:
-  id: feat-auth
-
-execution:
-  stages:
-    - name: start-feature
-      status: success
-    - name: implement-feature
-      status: failed
-      error:
-        code: IMPLEMENTATION_ERROR
-        message: "Task 3 failed: service not found"
-      completed_tasks: 2
-      failed_task: 3
-
-  current_stage: implement-feature
-  can_resume: true
-
-message: |
-  ⚠️ Development interrupted
-
-  Failed at: implement-feature
-  Reason: Task 3 failed
-
-  Completed: 2/5 tasks
-
-  Suggestion:
-  Fix and run: /dev-feature feat-auth --resume
-```
-
-### Interactive Mode
+## Agent Tool 调用
 
 ```
-User: /dev-feature feat-auth --interactive
+Agent Tool:
+  subagent_type: "dev-subagent"
+  description: "DevSubAgent: {feature_id}"
+  run_in_background: true  (batch > 1)
 
-Agent: 📋 Checking status...
-       feat-auth: pending
-
-       ┌───────────────────────────────────────────┐
-       │ Stage 1/4: start-feature                   │
-       ├───────────────────────────────────────────┤
-       │ Will execute:                              │
-       │ - Create branch feature/auth               │
-       │ - Create worktree ../OA_Tool-feat-auth     │
-       └───────────────────────────────────────────┘
-
-       Continue? (y/n/skip)
-
-User: y
-
-Agent: ✅ start-feature complete
-
-       ┌───────────────────────────────────────────┐
-       │ Stage 2/4: implement-feature               │
-       ├───────────────────────────────────────────┤
-       │ Will implement:                            │
-       │ 1. Create User model                       │
-       │ 2. Register API                            │
-       │ 3. Login API                               │
-       │ 4. Logout API                              │
-       │ 5. Auth middleware                         │
-       └───────────────────────────────────────────┘
-
-       Continue? (y/n/skip)
-
-User: y
-
-Agent: 🔨 Implementing...
-       [1/5] ✅ [2/5] ✅ [3/5] ✅ [4/5] ✅ [5/5] ✅
-
-       ✅ implement-feature complete
-       ...
+  prompt: |
+    FEATURE_ID: {id}
+    FEATURE_NAME: {name}
+    MODE: {full | no-complete}
+    RETRY_LIMIT: 2
 ```
 
-## Decision Logic
+## 错误处理
 
-### Determine Starting Stage
+| 场景 | 处理 |
+|------|------|
+| SubAgent error | 记录诊断，re-queue，继续其他 feature |
+| 所有 pending blocked | 报告阻塞原因，暂停 |
+| queue.yaml 损坏 | 停止，报错 |
 
-```python
-def determine_start_stage(feature):
-    if feature.status == "pending":
-        return "start"
-    elif feature.status == "active":
-        if all_tasks_completed(feature):
-            if verification_passed(feature):
-                return "complete"
-            else:
-                return "verify"
-        else:
-            return "implement"
-    elif feature.status == "blocked":
-        return None  # Need to unblock first
-    else:
-        return None  # Already done
-```
-
-### Handle Error
-
-```python
-def handle_error(stage, error):
-    if error.recoverable:
-        report_error(error)
-        suggest_fix(error)
-        wait_for_user_action()
-    else:
-        report_error(error)
-        suggest_manual_fix(error)
-        save_state()
-        exit()
-```
-
-## State Persistence
-
-Progress saved in `.dev-progress.yaml`:
-
-```yaml
-feature_id: feat-auth
-started: 2026-03-02T10:00:00
-current_stage: implement-feature
-stages:
-  start-feature:
-    status: completed
-    completed_at: 2026-03-02T10:00:05
-  implement-feature:
-    status: in_progress
-    started_at: 2026-03-02T10:00:05
-    tasks_completed: [1, 2]
-    tasks_pending: [3, 4, 5]
-```
-
-## Examples
-
-### From Description
+## 与其他组件的关系
 
 ```
-User: /dev-feature "User auth with login, register, logout"
-
-Agent: 📋 Creating feature...
-       ✅ feat-auth created
-
-       🚀 Starting development...
-       ✅ Environment ready
-
-       🔨 Implementing...
-       ✅ Code complete
-
-       🔍 Verifying...
-       ✅ Verification passed
-
-       📦 Completing...
-       ✅ Merged to main
-
-       🎉 Done! Total: 3m 30s
+.claude/commands/dev-agent.md     ← 本文件 (入口，主上下文)
+    → dispatches via Agent Tool
+        .claude/agents/dev-subagent.md  ← 执行器 (独立上下文)
+            → Skill Tool 调用:
+                .claude/skills/start-feature.md
+                .claude/skills/implement-feature.md
+                .claude/skills/verify-feature.md
+                .claude/skills/complete-feature.md
 ```
-
-### Continue Development
-
-```
-User: /dev-feature feat-auth
-
-Agent: 📋 Checking status...
-       feat-auth: active (2/5 tasks done)
-
-       🔨 Continuing...
-       ✅ Code complete (5/5)
-
-       🔍 Verifying...
-       ✅ Passed
-
-       🎉 Done!
-```
-
-### Resume After Error
-
-```
-User: /dev-feature feat-auth --resume
-
-Agent: 📋 Found previous run
-       Last stage: implement-feature (failed at task 3)
-
-       🔨 Resuming from task 3...
-       ✅ Complete
-
-       🔍 Verifying...
-       ✅ Passed
-
-       🎉 Done!
-```
-
-## Notes
-
-1. **Interruptible** - Can stop at any stage, resume later
-2. **Progress preserved** - Failed runs save state
-3. **Manual intervention** - Can pause, edit, continue
-4. **Works with feature-manager** - Can be called by master agent

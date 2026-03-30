@@ -1,20 +1,24 @@
 ---
-description: 'Master agent for feature workflow management - handles intent parsing, skill coordination, auto-scheduling, and exception handling.'
+description: 'Master agent for feature workflow management - handles intent parsing, skill coordination, and exception handling. Auto-scheduling has been migrated to MateAgent.'
 ---
 
 # Agent: feature-manager
 
-Master agent for the feature workflow system. Handles user intent, coordinates skills, manages auto-scheduling, and handles exceptions.
+Master agent for the feature workflow system. Handles user intent, coordinates skills, and handles exceptions.
+
+> **Note:** The auto-scheduling capability has been migrated to **MateAgent** (`agents-implemented/mate-agent.md`).
+> feature-manager now focuses on **user interaction and intent parsing**.
 
 ## Role
 
-feature-manager is the "brain" of the feature management system:
+feature-manager is the "user interaction layer" of the feature management system:
 
-1. **Parse Intent** - Understand what the user wants
-2. **Coordinate Skills** - Call appropriate skills
-3. **Auto-Schedule** - Manage feature flow automatically
-4. **Handle Exceptions** - Deal with errors gracefully
-5. **Monitor State** - Track and report system status
+1. **Parse Intent** - Understand what the user wants from natural language
+2. **Coordinate Skills** - Call appropriate skills based on intent
+3. **Handle Exceptions** - Deal with errors gracefully
+4. **Monitor State** - Track and report system status
+
+> **Deprecated:** `Auto-Schedule` (migrated to MateAgent — see `agents-implemented/mate-agent.md`)
 
 ## Capabilities
 
@@ -85,32 +89,14 @@ User: "feat-auth is done"
 → Call: complete-feature feat-auth
 ```
 
-### Auto-Scheduling
+### Auto-Scheduling (MIGRATED to MateAgent)
 
-When a feature completes:
-```python
-def on_feature_complete(feature_id):
-    config = read_config()
+> **This capability has been moved to MateAgent** (`agents-implemented/mate-agent.md`).
+> MateAgent provides superior scheduling with parallel SubAgent execution.
 
-    if not config.auto_start:
-        return
+When a feature completes, MateAgent automatically evaluates the queue and launches the next batch of DevSubAgents.
 
-    queue = read_queue()
-
-    if queue.active.length >= config.max_concurrent:
-        return
-
-    if queue.pending is empty:
-        return
-
-    next_feature = get_next_pending(queue)
-
-    if has_unmet_dependencies(next_feature):
-        move_to_blocked(next_feature)
-        return
-
-    start_feature(next_feature.id)
-```
+For manual scheduling, users can still call `/start-feature` directly.
 
 ### Exception Handling
 
@@ -291,23 +277,25 @@ Agent is stateless - can be restarted without losing data.
 │                           User                                   │
 └─────────────────────────────────────────────────────────────────┘
                               │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    feature-manager (Agent)                       │
-│                                                                  │
-│  - Parse intent                                                  │
-│  - Coordinate skills                                             │
-│  - Auto-schedule                                                 │
-│  - Handle exceptions                                             │
-└─────────────────────────────────────────────────────────────────┘
+                ┌─────────────┼─────────────────────┐
+                ▼             ▼                     ▼
+┌────────────────────┐ ┌──────────────────┐ ┌──────────────┐
+│ feature-manager    │ │ dev-agent        │ │ pm-agent     │
+│ (user interaction) │ │ (entry point)    │ │ (context)    │
+│                    │ │                  │ │              │
+│ - Parse intent     │ │ → MateAgent      │ │ - Project    │
+│ - Coordinate skills│ │   (scheduler)    │ │   context    │
+│ - Handle errors    │ │   → DevSubAgent  │ │              │
+└────────────────────┘ │   × N (executors)│ └──────────────┘
+                       └──────────────────┘
                               │
-        ┌─────────────────────┼─────────────────────┐
-        ▼                     ▼                     ▼
+                ┌─────────────┼─────────────────────┐
+                ▼             ▼                     ▼
 ┌──────────────┐    ┌──────────────┐    ┌──────────────┐
 │    Skills    │    │   Workflows  │    │    Files     │
 │              │    │              │    │              │
 │ new-feature  │    │ lifecycle    │    │ config.yaml  │
-│ start-feat   │    │ auto-sched   │    │ queue.yaml   │
+│ start-feat   │    │              │    │ queue.yaml   │
 │ complete-feat│    │              │    │ archive-log  │
 │ ...          │    │              │    │              │
 └──────────────┘    └──────────────┘    └──────────────┘

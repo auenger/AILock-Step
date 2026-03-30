@@ -18,6 +18,8 @@ Options:
 - `--no-merge`: Commit only, don't merge
 - `--keep-branch`: Keep branch after merge
 - `--resume`: Continue after resolving rebase conflicts
+- `--auto-resolve`: Automatically resolve rebase conflicts (for SubAgent use)
+- `--auto`: Shorthand for `--auto-resolve --skip-checklist` (full auto mode for SubAgent)
 
 ## Pre-flight Checks
 
@@ -49,9 +51,11 @@ From `queue.yaml`:
 ⚠️ Incomplete items:
   - [ ] Unit tests written
   - [ ] Documentation updated
-
-Continue anyway? (y/n)
 ```
+
+**If `--skip-checklist` or `--auto`**: Skip confirmation, proceed with warning logged.
+
+**Otherwise**: `Continue anyway? (y/n)`
 
 ### Step 3: Commit Code
 
@@ -105,6 +109,76 @@ git rebase {main_branch}
 
 If rebase encounters conflicts:
 
+**Mode A: Auto-Resolve (`--auto-resolve` or `--auto`)**
+
+When called by SubAgent, conflicts are resolved automatically without human intervention:
+
+```
+🔄 Auto-Resolve Conflict Flow:
+
+1. DETECT: git diff --name-only --diff-filter=U
+   → Get list of conflicting files
+
+2. ANALYZE: For each conflicting file:
+   a. Read the file, identify <<<< ==== >>>> markers
+   b. Read spec.md to understand this feature's intent
+   c. Read project-context.md for project conventions
+   d. Understand both sides of the conflict:
+      - "ours" (feature branch) — this feature's changes
+      - "theirs" (main branch) — other features' changes
+   e. Intelligent merge strategy:
+      - Non-overlapping changes → Keep both
+      - Same function modified → Combine logic, favor completeness
+      - Import conflicts → Merge import lists, remove duplicates
+      - Config changes → Merge, warn on contradictions
+   f. Write resolved content to the file
+   g. git add <file>
+
+3. CONTINUE: git rebase --continue
+   → If more conflicts → Repeat Step 2
+
+4. RE-VERIFY: Run tests in worktree to confirm resolution didn't break anything
+   → If tests fail → Attempt auto-fix (max 1 retry)
+   → If still failing → Log warning, proceed with merge
+
+5. RECORD: Log conflict details for archive:
+   - Conflict files list
+   - Resolution strategy used
+   - Re-verification result
+```
+
+**Auto-Resolve Intelligence Guidelines:**
+
+```yaml
+conflict_resolution_rules:
+  imports:
+    - Merge both import lists
+    - Remove duplicates
+    - Preserve alphabetical/section ordering
+
+  functions:
+    - If only one side modified: keep the modified version
+    - If both sides modified same function:
+      - Read spec.md to understand intent
+      - Combine changes logically
+      - If contradictory: favor the change that aligns with spec
+
+  config_files:
+    - Merge YAML/JSON keys
+    - If same key has different values: keep the more recent (main's) value
+    - Log warning for value conflicts
+
+  new_files:
+    - If both sides added same file: merge content
+    - If one side added, other didn't: keep the addition
+
+  deletions:
+    - If one side deleted, other modified: keep the modification
+    - Log warning about the deletion
+```
+
+**Mode B: Manual Resolve (default, no --auto-resolve)**
+
 ```
 ❌ Rebase 冲突检测到
 
@@ -117,12 +191,12 @@ If rebase encounters conflicts:
   3. git add .
   4. git rebase --continue
   5. /verify-feature {id}        ← 重新验证
-  6. /complete-feature {id} --no-commit --resume
+  6. /complete-feature {id} --resume
 
 💡 冲突在当前 feature 内解决，不影响其他 feature
 ```
 
-**Conflict Resolution Flow:**
+**Conflict Resolution Flow (Manual):**
 ```
 冲突发生 → 在 worktree 中解决 → git rebase --continue
     → 重新验证 /verify-feature → 继续 /complete-feature --resume
@@ -443,11 +517,13 @@ cd ../OA_Tool-feat-dashboard
 | NOT_FOUND | Feature not in active list | Check ID |
 | WORKTREE_NOT_FOUND | Worktree missing | Check if manually deleted |
 | NOTHING_TO_COMMIT | No changes to commit | Confirm development done |
-| REBASE_CONFLICT | Rebase conflict occurred | Resolve in worktree, re-verify, retry |
+| REBASE_CONFLICT | Rebase conflict occurred | Manual: resolve in worktree, re-verify. Auto: resolved automatically |
 | TAG_EXISTS | Tag already exists | Use different tag name |
 | GIT_ERROR | Git operation failed | Check Git status |
 
 ## Rebase Conflict Resolution
+
+### Manual Mode (default)
 
 ```
 ❌ Rebase 冲突检测到
@@ -465,6 +541,18 @@ cd ../OA_Tool-feat-dashboard
 
 💡 冲突在当前 feature 内解决，不影响其他 feature
 ```
+
+### Auto-Resolve Mode (`--auto-resolve`)
+
+SubAgent 自动解决冲突，无需人工介入。详见 Step 4.4 Mode A。
+
+**关键流程:**
+1. 获取冲突文件列表
+2. 逐个分析 `<<<<` / `====` / `>>>>` 标记
+3. 结合 spec.md 和 project-context.md 智能合并
+4. `git add` → `git rebase --continue`
+5. 重新运行测试验证
+6. 冲突记录写入 archive-log.yaml
 
 ## Resume Option
 
@@ -488,8 +576,9 @@ git log feat-auth-20260302
 ## Notes
 
 1. **Tag naming conflicts**: Auto-append sequence number (feat-auth-20260302-2)
-2. **Rebase conflicts**: Resolved in worktree, re-verification recommended
+2. **Rebase conflicts**: Manual mode requires user intervention; Auto-Resolve mode handles automatically
 3. **Empty commits**: Warn user if no changes
 4. **Checklist skips**: Recorded in archive-log.yaml
 5. **Branch recovery**: Always possible via tag
 6. **Conflict tracking**: All conflicts recorded in archive-log.yaml for traceability
+7. **SubAgent compatibility**: Use `--auto` flag for full automation (auto-resolve + skip-checklist)
