@@ -1,6 +1,6 @@
 # Feature Workflow
 
-基于 Git Worktree 的多需求并行开发工作流。
+基于 Git Worktree 的多需求并行开发工作流，核心架构: **一个 Feature = 一个 Worktree = 一个独立开发环境**。
 
 ## 核心理念
 
@@ -11,78 +11,138 @@
 - **文档驱动**: 每个需求包含 spec/task/checklist 三个文档
 - **归档策略**: 完成后创建 tag 归档，删除 worktree 和分支
 
+## 架构 (v3)
+
+基于 Claude Code v2.1.x 的 **Command + Agent + Skill** 三层架构：
+
+```
+User → /dev-agent (Command, 主上下文)
+         │  ← 调度：读取队列、评估依赖、批量派发
+         │
+         ├── Agent Tool → DevSubAgent (Agent, 独立 200k 上下文)
+         │                    ├── Skill Tool → /start-feature
+         │                    ├── Skill Tool → /implement-feature --auto
+         │                    ├── Skill Tool → /verify-feature --auto-fix
+         │                    └── Skill Tool → /complete-feature --auto
+         │
+         └── Agent Tool → DevSubAgent × N (批量并行, run_in_background)
+```
+
+**MateAgent 已废弃** — v2.1.x 不支持 SubAgent 嵌套，调度逻辑合并到 dev-agent Command。
+
 ## 目录结构
 
 ```
-/OA_Tool/                              ← 主仓库 (main 分支)
-├── feature-workflow/                  ← 工作流配置目录
-│   ├── config.yaml                    ← 项目配置
-│   ├── queue.yaml                     ← 调度队列
-│   └── templates/                     ← 文档模板
+{project-root}/
+├── .claude/                          ← Claude Code 部署目录
+│   ├── commands/
+│   │   └── dev-agent.md              ← /dev-agent 入口命令（主上下文）
+│   ├── agents/
+│   │   └── dev-subagent.md           ← DevSubAgent 执行器（独立 200k 上下文）
+│   └── skills/                       ← 11 个 Skill
+│       ├── start-feature.md
+│       ├── implement-feature.md      ← 支持 --auto
+│       ├── verify-feature.md         ← 支持 --auto-fix
+│       ├── complete-feature.md       ← 支持 --auto-resolve / --auto
+│       ├── new-feature.md
+│       ├── list-features.md
+│       ├── block-feature.md
+│       ├── unblock-feature.md
+│       ├── feature-config.md
+│       ├── cleanup-features.md
+│       └── pm-agent.md
 │
-├── features/                          ← 需求目录
-│   ├── pending-feat-xxx/              ← 等待中
-│   ├── active-feat-xxx/               ← 进行中
-│   └── archive/                       ← 归档区
-│       ├── archive-log.yaml           ← 归档日志
-│       └── done-feat-xxx/             ← 已完成
+├── feature-workflow/                 ← 工作流设计 + 配置
+│   ├── config.yaml                   ← 项目配置（并行数、命名规则、归档策略）
+│   ├── queue.yaml                    ← 状态中心（active/pending/blocked/completed）
+│   ├── templates/                    ← 文档模板（spec.md, task.md, checklist.md）
+│   ├── implementation/               ← 设计文档 + 实现参考
+│   │   ├── core-lib.md               ← 共享工具函数、Git 命令参考、错误码
+│   │   ├── skills/                   ← Skill 设计文档
+│   │   ├── skills-implemented/       ← Skill 实现参考
+│   │   ├── agents/                   ← Agent 设计文档
+│   │   └── agents-implemented/       ← Agent 实现参考
+│   ├── docs/                         ← 架构设计文档
+│   ├── tests/                        ← 测试文档
+│   ├── workflow-spec.md              ← 完整工作流规范
+│   └── README.md                     ← 本文件
+│
+├── features/                         ← 需求目录
+│   ├── pending-feat-xxx/             ← 等待中
+│   ├── active-feat-xxx/              ← 进行中
+│   └── archive/                      ← 归档区
+│       ├── archive-log.yaml          ← 归档日志
+│       └── done-feat-xxx/            ← 已完成
 │
 └── src/
 
-/OA_Tool-feat-xxx/                     ← worktree (同级目录)
+{project-root}-feat-xxx/              ← worktree（同级目录）
 ```
 
 ## 命令列表
 
-### Agents
+### /dev-agent（入口命令）
 
-| 命令 | 说明 |
+| 用法 | 说明 |
 |------|------|
-| `/pm-agent` | PM Agent - 建立/更新项目上下文 (project-context.md) |
-| `/feature-manager` | 主控 Agent - 需求调度、状态监控 |
-| `/dev-agent` | 开发 Agent - 自动化开发流程 |
+| `/dev-agent` | 批量模式：自动调度所有 pending features |
+| `/dev-agent feat-xxx` | 单 feature 模式：执行指定 feature |
+| `/dev-agent --resume` | 恢复模式：从断点继续 |
+| `/dev-agent --no-complete` | 跳过 complete 阶段 |
 
 ### Skills
 
-| 命令 | 说明 |
-|------|------|
-| `/new-feature` | 创建新需求 |
-| `/start-feature <id>` | 启动需求开发 |
-| `/implement-feature <id>` | 实现需求代码 |
-| `/verify-feature <id>` | 验证需求完成 |
-| `/complete-feature <id>` | 完成需求（提交→合并→归档） |
-| `/list-features` | 查看所有需求状态 |
-| `/block-feature <id>` | 阻塞某个需求 |
-| `/unblock-feature <id>` | 解除阻塞 |
-| `/feature-config` | 修改配置 |
-| `/cleanup-features` | 清理无效的 worktree |
+| 命令 | 功能 | 自动化标志 |
+|------|------|-----------|
+| `/new-feature <描述>` | 创建需求 | — |
+| `/start-feature <id>` | 启动开发（分支 + worktree） | — |
+| `/implement-feature <id>` | 实现代码 | `--auto` 跳过确认 |
+| `/verify-feature <id>` | 验证完成 | `--auto-fix` 自动修复 |
+| `/complete-feature <id>` | 完成归档 | `--auto-resolve` 自动冲突解决 |
+| `/list-features` | 查看所有需求状态 | — |
+| `/block-feature <id>` | 阻塞需求 | — |
+| `/unblock-feature <id>` | 解除阻塞 | — |
+| `/feature-config` | 修改配置 | — |
+| `/cleanup-features` | 清理无效 worktree | — |
+| `/pm-agent` | 建立/更新项目上下文 | — |
 
 ## 完整开发流程
 
+### 手动模式
+
 ```
-/pm-agent                 建立项目上下文（新项目/现有项目梳理）
+/pm-agent                 建立项目上下文
       ↓
 /new-feature              创建需求（对话 → 文档 → 队列）
       ↓
-/start-feature            启动开发（创建分支 → 创建 worktree）
+/start-feature            启动开发（分支 → worktree）
       ↓
-/implement-feature        实现代码（读取 spec → 分析 task → 写代码）
+/implement-feature        实现代码（spec → task → 写代码）
       ↓
-/verify-feature           验证功能（执行 checklist → 运行测试）
+/verify-feature           验证功能（checklist → 测试）
       ↓
-/complete-feature         完成需求（提交 → 合并 → 创建 tag → 归档）
-      ↓
-自动调度下一个
+/complete-feature         完成需求（提交 → 合并 → tag → 归档）
 ```
 
-### PM Agent 使用场景
+### 自动模式
 
-| 场景 | 命令 | 说明 |
-|------|------|------|
-| 新项目初始化 | `/pm-agent` | 通过对话建立项目上下文 |
-| 现有项目梳理 | `/pm-agent 帮我梳理这个项目` | 自动扫描代码库，生成上下文 |
-| 更新上下文 | `/pm-agent 更新上下文` | 增量更新 project-context.md |
-| 快速添加规则 | `/pm-agent 添加规则：xxx` | 快速添加一条规则 |
+```
+/dev-agent feat-xxx → DevSubAgent
+                        ├── start (分支 + worktree)
+                        ├── implement --auto (写代码)
+                        ├── verify --auto-fix (测试 + 自动修复)
+                        ├── complete --auto (合并 + 自动冲突解决 + tag + 归档)
+                        └── return JSON result
+
+/dev-agent → 批量启动 DevSubAgent × N → 自动循环
+```
+
+## 全自动原则
+
+- DevSubAgent 全程无人值守（独立 200k 上下文，不污染主对话）
+- 测试失败 → 自动修复代码 → 重跑测试（最多 2 次）
+- Rebase 冲突 → 智能分析 → 自动合并 → 重新验证
+- 多次重试仍失败 → 返回 error（附带详细诊断），不阻塞其他 feature
 
 ## 状态流转
 
@@ -96,113 +156,24 @@
 
 ## 归档策略
 
-完成后执行：
-- ✅ 创建归档 tag (格式: feat-auth-20260302)
-- ✅ 删除 worktree（释放空间）
-- ✅ 删除分支（可通过 tag 恢复）
-- ✅ 更新 spec.md 添加合并记录
-- ✅ 更新 archive-log.yaml
+- 创建归档 tag（格式: `feat-auth-20260302`）
+- 删除 worktree（释放空间）
+- 删除分支（可通过 tag 恢复）
+- 更新 archive-log.yaml
 
-## 文件说明
+## 关键文件路径
 
 | 文件 | 位置 | 说明 |
 |------|------|------|
-| config.yaml | feature-workflow/ | 项目配置（并行数、命名规则、归档策略） |
-| queue.yaml | feature-workflow/ | 调度队列（活跃和待处理的需求） |
-| archive-log.yaml | features/archive/ | 归档日志（已完成需求的摘要和 tag） |
-| templates/ | feature-workflow/ | 文档模板（spec.md, task.md, checklist.md） |
-
-## 使用方式
-
-### 方式 1: 逐步调用 Skill
-
-```
-/new-feature 用户认证
-/start-feature feat-auth
-/implement-feature feat-auth
-/verify-feature feat-auth
-/complete-feature feat-auth
-```
-
-### 方式 2: 使用 dev-agent 自动化
-
-```
-/dev-feature feat-auth
-```
-
-### 方式 3: 使用 workflow 交互引导
-
-```
-/feature-lifecycle
-```
+| config.yaml | feature-workflow/ | 项目配置 |
+| queue.yaml | feature-workflow/ | 调度队列（状态中心） |
+| archive-log.yaml | features/archive/ | 归档日志 |
+| templates/ | feature-workflow/ | 文档模板 |
+| project-context.md | {project-root}/ | 项目上下文（由 /pm-agent 生成） |
+| core-lib.md | feature-workflow/implementation/ | 共享工具函数 |
 
 ## 实现状态
 
-### Phase 1: 核心 Skills ✅ 已完成
-
-| Skill | 命令 | 状态 |
-|-------|------|------|
-| new-feature | `/new-feature` | ✅ 已实现 |
-| start-feature | `/start-feature` | ✅ 已实现 |
-| implement-feature | `/implement-feature` | ✅ 已实现 |
-| verify-feature | `/verify-feature` | ✅ 已实现 |
-| complete-feature | `/complete-feature` | ✅ 已实现 |
-| list-features | `/list-features` | ✅ 已实现 |
-
-### Phase 2: 管理 Skills ✅ 已完成
-
-| Skill | 命令 | 状态 |
-|-------|------|------|
-| block-feature | `/block-feature` | ✅ 已实现 |
-| unblock-feature | `/unblock-feature` | ✅ 已实现 |
-| feature-config | `/feature-config` | ✅ 已实现 |
-| cleanup-features | `/cleanup-features` | ✅ 已实现 |
-
-### Phase 3: Workflows ✅ 已完成
-
-| Workflow | 命令 | 状态 |
-|----------|------|------|
-| feature-lifecycle | `/feature-lifecycle` | ✅ 已实现 |
-| auto-schedule | `/auto-schedule` | ✅ 已实现 |
-
-### Phase 4: Agents ✅ 已完成
-
-| Agent | 命令 | 状态 |
-|-------|------|------|
-| pm-agent | `/pm-agent` | ✅ 已实现 |
-| feature-manager | `/feature-manager` | ✅ 已实现 |
-| dev-agent | `/dev-agent` | ✅ 已实现 |
-
-## 实现文件位置
-
-```
-.claude/commands/feature-workflow/
-├── skills/                   ← Skills (10个)
-│   ├── new-feature.md
-│   ├── start-feature.md
-│   ├── implement-feature.md
-│   ├── verify-feature.md
-│   ├── complete-feature.md
-│   ├── list-features.md
-│   ├── block-feature.md
-│   ├── unblock-feature.md
-│   ├── feature-config.md
-│   └── cleanup-features.md
-├── workflows/                ← Workflows (2个)
-│   ├── feature-lifecycle.md
-│   └── auto-schedule.md
-└── agents/                   ← Agents (3个)
-    ├── pm-agent.md           ← PM Agent
-    ├── feature-manager.md
-    └── dev-agent.md
-
-feature-workflow/implementation/
-├── skills-implemented/       ← Skills 冗余副本
-├── workflows-implemented/    ← Workflows 冗余副本
-├── agents-implemented/       ← Agents 冗余副本
-│   ├── pm-agent.md           ← PM Agent
-│   ├── feature-manager.md
-│   └── dev-agent.md
-├── core-lib.md               ← 核心库文档
-└── MVP-README.md             ← MVP 说明
-```
+- Phase 1-4: Skills + Workflows + Agents — 全部完成
+- Phase 5: SubAgent 架构优化（Command + Agent v3）— 已完成
+- MVP 流程测试 100% 通过
