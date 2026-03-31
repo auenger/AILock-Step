@@ -44,6 +44,13 @@ User → /dev-agent (command, 主上下文)
 /dev-agent --no-complete        # 跳过 complete 阶段
 ```
 
+## Pre-flight
+
+1. Read `feature-workflow/config.yaml` — get `parallelism.max_concurrent`, naming conventions, `workflow.auto_start`
+2. Read `feature-workflow/queue.yaml` — get active, pending, blocked, completed lists
+3. Read `features/archive/archive-log.yaml` — for dependency checking
+4. **If `workflow.auto_start` is `true`**: create loop marker file `feature-workflow/.loop-active` (this tells the stop-hook that auto-loop is active)
+
 ## 调度循环
 
 ```
@@ -90,6 +97,13 @@ Agent Tool:
     RETRY_LIMIT: 2
 ```
 
+## Loop Cleanup
+
+When the auto-loop ends (all done, all blocked, or error), **always** remove the loop marker:
+```
+rm -f feature-workflow/.loop-active
+```
+
 ## 错误处理
 
 | 场景 | 处理 |
@@ -120,4 +134,15 @@ Agent Tool:
 | Hook 事件 | 脚本 | 作用 |
 |-----------|------|------|
 | `SubagentStop` | `.claude/hooks/on-subagent-complete.sh` | SubAgent 完成时注入续跑指令 |
-| `Stop` | `.claude/hooks/on-stop-check.sh` | Claude 尝试停止时拦截，检查是否有 pending features |
+| `Stop` | `.claude/hooks/on-stop-check.sh` | Claude 尝试停止时拦截（四层检查） |
+
+### on-stop-check.sh 检查机制
+
+Hook 通过 `.loop-active` marker 区分两种模式，检查逻辑不同：
+
+| 模式 | 判断条件 | 检查的配置 | 说明 |
+|------|----------|-----------|------|
+| `/dev-agent` 自动循环 | `.loop-active` 存在 | `auto_start_next: true` | 循环内只看续跑开关 |
+| 手动模式（如 `/new-feature`） | `.loop-active` 不存在 | `auto_start: true` | 主开关 `false` → 直接放行 |
+
+两种模式下 pending 队列为空时都放行（exit 0）。

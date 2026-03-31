@@ -191,6 +191,15 @@ User → /dev-agent (Command, 主上下文)
 - Rebase 冲突 → 智能分析 → 自动合并 → 重新验证
 - 多次重试仍失败 → 返回 error（附带详细诊断），不阻塞其他 feature
 
+### Stop Hook 智能拦截
+
+`on-stop-check.sh` 通过 `.loop-active` marker 区分两种模式，避免手动操作（如 `/new-feature`）被误拦截：
+
+| 模式 | 判断条件 | 检查配置 | 说明 |
+|------|----------|---------|------|
+| `/dev-agent` 自动循环 | `.loop-active` 存在 | `auto_start_next: true` | 循环内只看续跑开关 |
+| 手动模式 | `.loop-active` 不存在 | `auto_start: true` | 主开关 `false` → 放行 |
+
 ## 状态流转
 
 ```
