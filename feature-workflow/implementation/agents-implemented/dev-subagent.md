@@ -1,52 +1,54 @@
 ---
-description: 'DevSubAgent - executes one feature full lifecycle via Skill Tool chaining: /start-feature → /implement-feature → /verify-feature → /complete-feature. Full automation.'
+description: 'DevSubAgent - executes one feature full lifecycle via Skill Tool chaining: /start-feature → /implement-feature → /verify-feature → /complete-feature. Full automation. Launched as general-purpose agent with injected prompt.'
 ---
 
 # Agent: DevSubAgent
 
 DevSubAgent 是一个 **Skill 编排器 SubAgent**，通过 Skill Tool 按顺序调用预加载的 Skills 完成一个 feature 的完整生命周期。
 
-> **部署位置**: `.claude/agents/dev-subagent.md`
-> **运行方式**: 由 `/dev-agent` 命令通过 Agent Tool 派发
+> **运行方式**: 由 `/dev-agent` 命令通过 Agent Tool 派发 (`subagent_type: "general-purpose"`)
 > **上下文**: 独立 200k 上下文窗口，不污染主对话
+> **行为定义**: 完全通过注入 prompt 定义，不依赖 `.claude/agents/` 文件
+
+> ⚠️ **重要**: DevSubAgent 使用 `general-purpose` 类型而非自定义 agent 文件，行为通过 `/dev-agent` 注入的 prompt 控制。这确保了 Skill Tool 的强制调用和可靠性。
 
 ## Role
 
 ```
 /dev-agent (command, 主上下文)
-  → Agent Tool → DevSubAgent (独立上下文)
-                   ├── Skill Tool → /start-feature {id}
-                   ├── Skill Tool → /implement-feature {id} --auto
-                   ├── Skill Tool → /verify-feature {id} --auto-fix
-                   └── Skill Tool → /complete-feature {id} --auto
-                   └── Return JSON result
+  → Agent Tool (subagent_type: "general-purpose", prompt 注入完整指令)
+    → DevSubAgent (独立 200k 上下文)
+        ├── ⚠️ MANDATORY RULE: Skill Tool Only (prompt 强制)
+        ├── Skill Tool → /start-feature {id}
+        ├── Skill Tool → /implement-feature {id} --auto
+        ├── Skill Tool → /verify-feature {id} --auto-fix
+        ├── Skill Tool → /complete-feature {id} --auto
+        └── Return JSON result
 ```
 
-## 部署格式
+## 派发方式
+
+DevSubAgent 通过 `general-purpose` 类型派发，行为由注入 prompt 定义：
 
 ```yaml
-# .claude/agents/dev-subagent.md
----
-description: "Feature development executor - completes one feature full lifecycle."
-allowed-tools:
-  - Bash
-  - Read
-  - Write
-  - Edit
-  - Glob
-  - Grep
-  - Skill
----
+# /dev-agent 中调用 Agent Tool
+Agent Tool:
+  subagent_type: "general-purpose"
+  description: "DevSubAgent: {feature_id} - {feature_name}"
+  run_in_background: true  (batch > 1)
+  prompt: |
+    ⚠️ MANDATORY RULE: Skill Tool Only
+    (完整 prompt 见 dev-agent.md)
 ```
 
-### 关键字段说明
+### 为什么用 general-purpose 而非自定义 agent
 
-| 字段 | 说明 |
-|------|------|
-| `description` | 主 agent 根据此字段判断何时派发 |
-| `allowed-tools` | 允许使用的工具列表（含 `Skill` 用于调用技能） |
+| 方案 | 优点 | 缺点 |
+|------|------|------|
+| `dev-subagent` (自定义) | 有 agent 文件做 fallback | v2.1.x 中 Skill 调用不可靠 |
+| `general-purpose` + prompt | Skill 调用更可靠，指令明确 | prompt 较长 |
 
-> 注意：Claude Code 不支持 `skills:` frontmatter 字段自动预加载。SubAgent 运行时通过 `Skill` Tool 动态调用所需的技能。
+> 关键原因: 最新版 Claude Code 中，自定义 SubAgent 有时不执行 Skill Tool，改用 `general-purpose` + 详细 prompt 可以强制 Skill 调用。
 
 ## 环境信息 (由 /dev-agent 注入)
 

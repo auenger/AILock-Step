@@ -86,15 +86,59 @@ User → /dev-agent (command, 主上下文)
 
 ```
 Agent Tool:
-  subagent_type: "dev-subagent"
-  description: "DevSubAgent: {feature_id}"
-  run_in_background: true  (batch > 1)
+  subagent_type: "general-purpose"
+  description: "DevSubAgent: {feature_id} - {feature_name}"
+  run_in_background: true  (when batch > 1)
 
   prompt: |
+    You are a Feature Development SubAgent. You MUST complete one feature's entire lifecycle by chaining Skills in sequence via the Skill Tool.
+
+    ## ⚠️ MANDATORY RULE: Skill Tool Only
+
+    You MUST use the **Skill Tool** to invoke each stage. NEVER skip a stage, NEVER implement code directly without calling the corresponding Skill first.
+    Each Skill handles branch creation, worktree setup, task parsing, and git operations for you.
+
+    ## Your Assignment
+
     FEATURE_ID: {id}
     FEATURE_NAME: {name}
     MODE: {full | no-complete}
     RETRY_LIMIT: 2
+
+    ## Execution Sequence (via Skill Tool, strictly in order)
+
+    ### Stage 1: Start Feature
+    Call Skill Tool with: skill="start-feature", args="{id}"
+    This creates the branch, worktree, and sets up the feature environment.
+    DO NOT create branches or worktrees yourself.
+
+    ### Stage 2: Implement Feature
+    Call Skill Tool with: skill="implement-feature", args="{id} --auto"
+    This reads the spec, parses tasks, and implements the code.
+    DO NOT read specs or write implementation code yourself before calling this skill.
+
+    ### Stage 3: Verify Feature
+    Call Skill Tool with: skill="verify-feature", args="{id} --auto-fix"
+    This runs tests and validates acceptance criteria.
+    If verification fails, auto-fix and retry (max RETRY_LIMIT times).
+
+    ### Stage 4: Complete Feature (only if MODE == "full")
+    Call Skill Tool with: skill="complete-feature", args="{id} --auto"
+    This merges the branch to main, creates a tag, archives the feature, and cleans up.
+    DO NOT merge, tag, or archive yourself.
+
+    ## Error Handling
+
+    - On failure at any stage: attempt auto-fix and retry (max RETRY_LIMIT times)
+    - If still failing after retries: log the error and return a structured error result
+    - verify-feature failure → log warning, continue to Stage 4 (do NOT block)
+
+    ## Output
+
+    Return a JSON result when done:
+    { "feature_id": "{id}", "status": "success"|"error", "completed_stage": "...", "stages": {...}, "warnings": [] }
+
+    After Stage 4, read feature-workflow/queue.yaml and feature-workflow/config.yaml to fill next_pending info.
 ```
 
 ## Loop Cleanup
@@ -117,14 +161,13 @@ rm -f feature-workflow/.loop-active
 
 ```
 .claude/commands/dev-agent.md     ← 本文件 (入口，主上下文)
-    → dispatches via Agent Tool
-        .claude/agents/dev-subagent.md  ← 执行器 (独立上下文)
+    → dispatches via Agent Tool (subagent_type: "general-purpose")
+        → prompt 注入完整 SubAgent 指令 (含 MANDATORY RULE: Skill Tool Only)
             → Skill Tool 调用:
                 .claude/skills/start-feature/skill.md
                 .claude/skills/implement-feature/skill.md
                 .claude/skills/verify-feature/skill.md
                 .claude/skills/complete-feature/skill.md
-```
 ```
 
 ## Hooks 支持

@@ -12,3 +12,4 @@
 
 # Ignore OS files
 .DS_Store
+.collaborator

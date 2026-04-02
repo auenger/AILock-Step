@@ -15,14 +15,17 @@ description: 'Design: DevAgent entry point command + DevSubAgent executor agent.
 User → /dev-agent (command, .claude/commands/)
          │  ← 主上下文，可 dispatch SubAgent
          │
-         └── Agent Tool → DevSubAgent (.claude/agents/)
-              │  ← 独立 200k 上下文
+         └── Agent Tool (subagent_type: "general-purpose")
+              │  ← 独立 200k 上下文，行为由注入 prompt 定义
               │
+              ├── ⚠️ MANDATORY RULE: Skill Tool Only
               ├── Skill Tool → /start-feature
               ├── Skill Tool → /implement-feature --auto
               ├── Skill Tool → /verify-feature --auto-fix
               └── Skill Tool → /complete-feature --auto
 ```
+
+> **关键变更**: SubAgent 使用 `general-purpose` 类型（而非自定义 `dev-subagent`），通过详细 prompt 强制 Skill Tool 调用，解决新版 Claude Code 中自定义 SubAgent 不执行 Skill 的问题。
 
 ## 为什么废弃 MateAgent
 
@@ -36,7 +39,7 @@ User → /dev-agent (command, .claude/commands/)
 | 组件 | 类型 | 位置 |
 |------|------|------|
 | dev-agent | Command (`.claude/commands/`) | `.claude/commands/dev-agent.md` |
-| dev-subagent | Agent (`.claude/agents/`) | `.claude/agents/dev-subagent.md` |
+| dev-subagent | `general-purpose` Agent (prompt 注入) | 行为由 `/dev-agent` 的 Agent Tool prompt 定义 |
 | start-feature | Skill (`.claude/skills/`) | `.claude/skills/start-feature/skill.md` |
 | implement-feature | Skill (`.claude/skills/`) | `.claude/skills/implement-feature/skill.md` |
 | verify-feature | Skill (`.claude/skills/`) | `.claude/skills/verify-feature/skill.md` |
