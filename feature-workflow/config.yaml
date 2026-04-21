@@ -52,6 +52,18 @@ completion:
     tag_format: "{id}-{date}"          # tag 格式: feat-auth-20260302
     tag_date_format: "%Y%m%d"          # 日期格式
 
+    # 元数据索引（用于 /query-archive 渐进式加载）
+    metadata:
+      auto_keywords: true              # 自动提取关键词（name + spec + task）
+      categories:                      # 预定义分类
+        - backend
+        - frontend
+        - fullstack
+        - infra
+        - docs
+        - refactor
+      track_related: true              # 自动追踪关联 feature（依赖 + 父子 + 相关历史）
+
   cleanup:
     delete_worktree: true              # 删除 worktree
     delete_branch: true                # 删除分支 (可从 tag 恢复)

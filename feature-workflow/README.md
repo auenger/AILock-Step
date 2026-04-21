@@ -55,7 +55,7 @@ cd company-ai-marketplace
 
 > **zip 文件位置**: `feature-workflow/company-ai-marketplace.zip`（89KB）
 >
-> 包含内容：1 command + 1 agent + 13 skills + 8 templates + 安装脚本
+> 包含内容：2 commands + 12 skills + 8 templates + 安装脚本
 
 ## 项目初始化
 
@@ -139,12 +139,13 @@ User → /dev-agent (Command, 主上下文)
 | 命令 | 功能 | 自动化标志 |
 |------|------|-----------|
 | `/init-project` | 初始化项目配置 | `--quick` 跳过确认 |
-| `/new-feature <描述>` | 创建需求 | — |
-| `/start-feature <id>` | 启动开发（分支 + worktree） | — |
+| `/new-feature <描述>` | 创建需求（自动搜索关联归档） | — |
+| `/start-feature <id>` | 启动开发（自动加载关联上下文） | — |
 | `/implement-feature <id>` | 实现代码 | `--auto` 跳过确认 |
 | `/verify-feature <id>` | 验证完成 | `--auto-fix` 自动修复 |
-| `/complete-feature <id>` | 完成归档 | `--auto-resolve` 自动冲突解决 |
+| `/complete-feature <id>` | 完成归档（写入丰富元数据） | `--auto-resolve` 自动冲突解决 |
 | `/list-features` | 查看所有需求状态 | — |
+| `/query-archive [options]` | 渐进式归档查询 | `--id`/`--keyword`/`--category`/`--related` |
 | `/block-feature <id>` | 阻塞需求 | — |
 | `/unblock-feature <id>` | 解除阻塞 | — |
 | `/feature-config` | 修改配置 | — |
@@ -215,7 +216,9 @@ User → /dev-agent (Command, 主上下文)
 - 创建归档 tag（格式: `feat-auth-20260302`）
 - 删除 worktree（释放空间）
 - 删除分支（可通过 tag 恢复）
-- 更新 archive-log.yaml
+- 更新 archive-log.yaml（含丰富元数据：keywords/category/value_points/related_features）
+- 渐进式查询：`/query-archive` 先读索引过滤，SubAgent 按需深度加载
+- 自动关联：`/new-feature` 自动搜索关联归档，`/start-feature` 自动加载依赖上下文
 
 ## 关键文件路径
 
@@ -233,5 +236,6 @@ User → /dev-agent (Command, 主上下文)
 
 - Phase 1-4: Skills + Workflows + Agents — 全部完成
 - Phase 5: SubAgent 架构优化（Command + Agent v3）— 已完成
+- Phase 6: 归档渐进式加载 + 自动关联 — 已完成
 - Marketplace 分发体系 — 已完成
 - MVP 流程测试 100% 通过

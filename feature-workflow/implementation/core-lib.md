@@ -85,6 +85,63 @@ blocked:                          # Blocked
     created: datetime
 ```
 
+## Workflow State Utilities
+
+Shared state file for loop coordination and concurrent safety.
+
+### State File Location
+```
+~/.claude/projects/-{encoded-project-path}/workflow-state.json
+```
+
+Outside git tree, shared across all worktrees. Path computed via:
+```bash
+echo "$HOME/.claude/projects/$(echo "$CLAUDE_PROJECT_DIR" | sed 's|/|-|g')/workflow-state.json"
+```
+
+### Utility Script
+`feature-workflow/scripts/state-utils.sh`
+
+Source in any skill or hook:
+```bash
+source feature-workflow/scripts/state-utils.sh
+```
+
+### Key Functions
+
+| Function | Usage | Description |
+|----------|-------|-------------|
+| `state_init` | `state_init` | Create initial state file (dev-agent startup) |
+| `state_cleanup` | `state_cleanup` | Remove state file (loop end) |
+| `state_loop_status <status>` | `state_loop_status "waiting_subagents"` | Update loop status |
+| `state_loop_iteration` | `state_loop_iteration` | Increment iteration counter |
+| `state_agent_register <id> <stage>` | `state_agent_register "feat-xxx" "start-feature"` | Add SubAgent tracking |
+| `state_agent_stage <id> <stage>` | `state_agent_stage "feat-xxx" "implement-feature"` | Update SubAgent stage |
+| `state_agent_complete <id>` | `state_agent_complete "feat-xxx"` | Mark SubAgent completed |
+| `state_agent_remove <id>` | `state_agent_remove "feat-xxx"` | Remove SubAgent entry |
+| `state_acquire_lock <file> <holder>` | `state_acquire_lock "queue.yaml" "feat-xxx"` | Acquire file lock (30s timeout) |
+| `state_release_lock <file>` | `state_release_lock "queue.yaml"` | Release file lock |
+| `state_update <expr>` | `state_update "state['loop']['active'] = False"` | Raw Python update |
+| `state_read <expr>` | `state_read "state.get('loop', {}).get('status', '')"` | Read state field |
+
+### Loop Status Values
+
+| Status | Meaning | Hook Instruction |
+|--------|---------|-----------------|
+| `dispatching` | Dev-agent is dispatching SubAgents | "Continue scheduling" |
+| `waiting_subagents` | Waiting for background SubAgents | "Wait, do not dispatch" |
+| `evaluating` | Collecting results, evaluating next step | "Continue evaluating" |
+| `stopping` | Loop ending normally | Allow stop |
+
+### File Lock Protocol
+
+Before writing `queue.yaml` or `archive-log.yaml`:
+1. `state_acquire_lock "queue.yaml" "{feature_id}"`
+2. Write the file
+3. `state_release_lock "queue.yaml"`
+
+Stale locks (> 5 minutes) are auto-released on next acquire attempt.
+
 ## Utility Functions
 
 ### Generate Slug
