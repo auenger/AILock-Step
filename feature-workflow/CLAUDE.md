@@ -39,12 +39,14 @@ User → /dev-agent (Command, .claude/commands/)
 │   │   └── dev-agent.md              ← /dev-agent 入口命令（主上下文）
 │   ├── agents/
 │   │   └── (dev-subagent.md 已删除)   ← DevSubAgent 行为由 dev-agent.md 注入 prompt 定义
-│   └── skills/                       ← 12 个 Skill
+│   └── skills/                       ← 14 个 Skill
 │       ├── start-feature.md
 │       ├── implement-feature.md      ← 支持 --auto
 │       ├── verify-feature.md         ← 支持 --auto-fix
 │       ├── complete-feature.md       ← 支持 --auto-resolve / --auto
 │       ├── query-archive.md          ← 渐进式归档查询（索引 → SubAgent 深度加载）
+│       ├── split-feature.md          ← 大 feature 拆分为子 feature（结构拆分）
+│       ├── enrich-feature.md         ← 充实子 feature 文档（渐进式归档加载 → AI 填充）
 │       ├── new-feature.md
 │       ├── list-features.md
 │       ├── block-feature.md
@@ -120,7 +122,7 @@ User → /dev-agent (Command, .claude/commands/)
 
 * `completion.archive`: 自动创建 tag、清理 worktree/分支
 
-* `workflow.splitting`: 3+ 价值点自动拆分
+* `workflow.splitting`: 3+ 价值点自动拆分，`auto_enrich` 拆分后自动充实子 feature
 
 ### queue.yaml
 
@@ -158,7 +160,7 @@ User → /dev-agent (Command, .claude/commands/)
 
 通过 `/query-archive` skill 实现渐进式加载：先读索引过滤，再通过 SubAgent 按需加载完整归档内容。
 
-## 命令体系（2 Commands + 12 Skills）
+## 命令体系（2 Commands + 14 Skills）
 
 ### /dev-agent 命令（批量调度）
 
@@ -195,6 +197,8 @@ User → /dev-agent (Command, .claude/commands/)
 | 命令                         | 功能                               |
 | -------------------------- | -------------------------------- |
 | `/query-archive [options]` | 查询归档（渐进式加载：索引搜索 → SubAgent 深度分析） |
+| `/split-feature <id>`      | 拆分大 feature 为子 feature（结构拆分 → 模块索引） |
+| `/enrich-feature <id>`     | 充实子 feature 文档（渐进式归档加载 → AI 填充三文件） |
 | `/block-feature <id>`      | 阻塞需求（标记原因）                       |
 | `/unblock-feature <id>`    | 解除阻塞                             |
 | `/feature-config`          | 修改配置                             |
@@ -275,6 +279,25 @@ User → /dev-agent (Command, .claude/commands/)
 
 * 父子关系通过 `parent`/`children` 字段管理
 
+### 拆分流程（split → enrich 两阶段）
+
+```text
+/split-feature feat-xxx          阶段 1: 结构拆分
+  ├── 分析 spec，按业务域拆分
+  ├── 创建子 feature 目录（骨架 spec.md + task.md）
+  ├── 原 feature → 模块索引
+  ├── 更新 queue.yaml（parents + pending）
+  └── config: auto_enrich=true 时自动触发 ↓
+
+/enrich-feature feat-xxx --all   阶段 2: 内容充实
+  ├── Level 1: 扫描 archive-log.yaml 索引
+  ├── Level 2: SubAgent 深度加载相关归档
+  ├── 提取实现模式 → 充实 spec.md（价值点 + 上下文 + Gherkin）
+  ├── 充实 task.md（具体任务项 + 归档模式引用）
+  ├── 创建 checklist.md
+  └── 确保兄弟 feature 边界不重叠
+```
+
 ## Git 操作约定
 
 * 合并策略: `--no-ff`（保留 merge commit）
@@ -331,6 +354,12 @@ User → /dev-agent (Command, .claude/commands/)
   * `/new-feature`: 自动搜索关联归档，填充 spec.md Dependencies/Related Features
   * `/start-feature`: 自动加载依赖 feature 的实现上下文（Agent Tool deep load）
   * 删除冗余 `.claude/agents/dev-subagent.md`
+
+* Phase 7: Feature 拆分 + 内容充实 — 已完成
+  * `/split-feature` skill: 大 feature 按业务域拆分为子 feature，原 feature 转模块索引
+  * `/enrich-feature` skill: 渐进式归档加载（Level 1 索引扫描 → Level 2 SubAgent 深度加载）充实子 feature 三文件
+  * `config.yaml` 新增 `workflow.splitting.auto_enrich` 配置项
+  * 拆分流程：split（结构拆分）→ enrich（内容充实）两阶段
 
 * MVP 流程测试 100% 通过
 

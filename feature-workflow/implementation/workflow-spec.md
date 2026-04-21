@@ -22,6 +22,7 @@ workflow:
     enabled: true                     # 启用需求切分功能
     threshold: 3                      # 3个以上用户价值点触发切分
     auto_dependencies: true           # 自动设置子需求依赖关系
+    auto_enrich: true                 # 拆分后自动调用 /enrich-feature 充实子 feature 文档
     force_split: false                # 是否强制切分（默认false）
     suggest_split: true               # 是否建议切分（默认true）
 
@@ -286,44 +287,77 @@ update_triggers:
 2. **增量交付**: 每个子需求独立交付价值
 3. **无循环依赖**: 子需求2不能依赖子需求3
 4. **按需创建**: 数据库/实体按需创建
-
 5. **上下文保护**: 每个子需求保持在 AI 上下文限制内
 
-### 2.2 切分触发条件
+### 3.2 切分触发条件
 
 当满足以下任一条件时，触发切分建议:
 
 - 用户价值点 ≥ 3 个
-- 用户明确请求切分
+- 用户明确请求切分（`/split-feature`）
 - AI 判断需求过于复杂
 
-### 2.3 切分流程
+### 3.3 两阶段切分流程（split + enrich）
+
+切分分为两个独立阶段，由两个 Skill 分别负责：
 
 ```
-/new-feature <需求描述>
+阶段 1: /split-feature（结构拆分）
+─────────────────────────────────
+/split-feature feat-xxx
         ↓
-Step 1: 收集需求信息
+Step 1: 加载 Feature spec
         ↓
-Step 2: AI 分析用户价值点
+Step 2: 分析并提议拆分（按业务域）
         ↓
-Step 3: 评估需求规模
+Step 3: 用户确认（Confirm/Edit/Cancel）
         ↓
-    ┌─────────────────┬─────────────────┐
-    │                 │                 │
-Small (1个)     Medium (2个)       Large (3+个)
-    │                 │                 │
-    ▼                 ▼                 ▼
-直接创建      可选切分          建议切分
+Step 4: 生成子 Feature ID
+        ↓
+Step 5: 创建子 feature 目录（骨架 spec.md + task.md）
+        ↓
+Step 6: 原始 Feature → 模块索引
+        ↓
+Step 7: 更新 queue.yaml（parents + pending）
+        ↓
+Step 8: 一致性验证
+        ↓
+    auto_enrich=true 时自动触发 ↓
+
+阶段 2: /enrich-feature（内容充实）
+─────────────────────────────────
+/enrich-feature feat-xxx --all
+        ↓
+Step 1: 加载本地上下文（parent spec + 兄弟 specs）
+        ↓
+Step 2: Level 1 — 归档索引扫描（archive-log.yaml）
+        → 关键词匹配 + 评分排序 → 选择 top 3-5 候选
+        ↓
+Step 3: Level 2 — SubAgent 深度加载相关归档
+        → 提取实现模式、文件结构、测试约定
+        ↓
+Step 4: 分析充实需求（gap report）
+        ↓
+Step 5: 充实 spec.md
+        → 价值点 + 上下文分析（引用归档代码）+ Gherkin 场景
+        ↓
+Step 6: 充实 task.md
+        → 具体任务分解 + Gherkin 映射 + 归档模式引用
+        ↓
+Step 7: 创建 checklist.md
+        ↓
+Step 8: 确认并写入
 ```
 
-### 2.4 规模评估标准
+### 3.4 规模评估标准
 
 | 规模 | 用户价值点 | 特征 |
 |------|----------|------|
 | S (Small) | 1 | 单一功能点，快速完成 |
 | M (Medium) | 2 | 几个相关功能点 |
 | L (Large) | 3+ | 多个独立功能模块，建议切分 |
-### 2.5 正确切分示例
+
+### 3.5 正确切分示例
 **输入**: "用户认证系统，支持注册、登录、权限管理"
 **分析**: 识别到 3 个用户价值点:
 1. 用户注册 - 创建新账户
@@ -341,6 +375,30 @@ feat-auth-db    → 数据库设计 (无用户价值)❌
 feat-auth-api   → API 开发 (无用户价值)❌
 feat-auth-ui    → 前端界面 (无用户价值)❌
 ```
+
+### 3.6 enrich-feature 渐进式归档加载
+
+enrich-feature 使用与 query-archive 相同的渐进式加载架构：
+
+**评分算法：**
+
+| 匹配类型 | 权重 | 说明 |
+|----------|------|------|
+| 关键词重叠 | × 3 | keywords[] 交集 |
+| 同分类 | × 2 | category 精确匹配 |
+| 直接依赖 | × 5 | 目标 feature 的 dependency 已完成 |
+| 关联链接 | × 2 | related_features[] 双向匹配 |
+
+**归档上下文应用：**
+
+| 充实目标 | 归档上下文来源 | 应用方式 |
+|----------|---------------|----------|
+| spec.md Reference Code | 归档 task.md 中的文件列表 | 列出具体参考文件路径 |
+| spec.md Related Features | archive-log.yaml related_features | 附带实现关联描述 |
+| spec.md Gherkin | 归档 spec.md 验收场景结构 | 参考场景粒度和格式 |
+| task.md 任务项 | 归档 task.md 任务分解模式 | "mirror feat-auth pattern" |
+| checklist.md | 归档 checklist.md 质量标准 | 参照测试覆盖目标 |
+
 ---
 
 ## 3. 验收规范

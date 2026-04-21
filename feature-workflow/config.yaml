@@ -37,6 +37,7 @@ workflow:
   splitting:
     enabled: true
     threshold: 3              # 超过3个价值点自动拆分
+    auto_enrich: true         # 拆分后自动调用 /enrich-feature 充实子 feature 文档
 
   # 测试配置
   testing:
